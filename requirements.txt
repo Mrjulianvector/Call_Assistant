@@ -1,0 +1,9 @@
+pyaudio==0.2.13
+numpy==1.24.3
+scipy==1.11.2
+pydub==0.25.1
+librosa==0.10.0
+pynput==1.7.6
+PyQt6==6.6.0
+python-dotenv==1.0.0
+sqlalchemy==2.0.20
