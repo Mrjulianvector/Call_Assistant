@@ -60,8 +60,163 @@ class CallAssistantApp(QMainWindow):
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Call Assistant - Audio Soundboard for Live Calls")
-        self.setGeometry(100, 100, 1200, 800)
+        self.setWindowTitle("🎵 Call Assistant - Audio Soundboard")
+        self.setGeometry(100, 100, 1300, 850)
+        
+        # Apply modern theme with gradients
+        self.setStyleSheet("""
+            QMainWindow {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #1e1e2e, stop:1 #181825);
+            }
+            QWidget {
+                background-color: transparent;
+                color: #cdd6f4;
+                font-family: 'Segoe UI', 'SF Pro Display', Arial, sans-serif;
+                font-size: 11pt;
+            }
+            QLabel {
+                color: #cdd6f4;
+                background-color: transparent;
+            }
+            QTabWidget::pane {
+                border: 2px solid #45475a;
+                background-color: #181825;
+                border-radius: 12px;
+            }
+            QTabBar::tab {
+                background-color: #313244;
+                color: #a6adc8;
+                padding: 12px 24px;
+                margin-right: 4px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                font-size: 11pt;
+                font-weight: 600;
+                min-width: 100px;
+            }
+            QTabBar::tab:selected {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #89b4fa, stop:1 #74c7ec);
+                color: #1e1e2e;
+                font-weight: 700;
+            }
+            QTabBar::tab:hover:!selected {
+                background-color: #45475a;
+                color: #cdd6f4;
+            }
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #89b4fa, stop:1 #74c7ec);
+                color: #1e1e2e;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 11pt;
+                font-weight: 700;
+                min-height: 35px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #b4befe, stop:1 #89dceb);
+            }
+            QPushButton:pressed {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #74c7ec, stop:1 #89b4fa);
+            }
+            QSlider::groove:horizontal {
+                background: #313244;
+                height: 10px;
+                border-radius: 5px;
+                border: 1px solid #45475a;
+            }
+            QSlider::handle:horizontal {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #89b4fa, stop:1 #b4befe);
+                width: 22px;
+                height: 22px;
+                margin: -7px 0;
+                border-radius: 11px;
+                border: 2px solid #1e1e2e;
+            }
+            QSlider::handle:horizontal:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #b4befe, stop:1 #cba6f7);
+                width: 24px;
+                height: 24px;
+                margin: -8px 0;
+            }
+            QSlider::sub-page:horizontal {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #89b4fa, stop:1 #74c7ec);
+                border-radius: 5px;
+            }
+            QComboBox, QLineEdit {
+                background-color: #313244;
+                color: #cdd6f4;
+                border: 2px solid #45475a;
+                padding: 10px 15px;
+                border-radius: 8px;
+                font-size: 11pt;
+                min-height: 20px;
+            }
+            QComboBox:hover, QLineEdit:hover {
+                border: 2px solid #89b4fa;
+                background-color: #3d3f54;
+            }
+            QComboBox:focus, QLineEdit:focus {
+                border: 2px solid #74c7ec;
+                background-color: #3d3f54;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 30px;
+            }
+            QListWidget {
+                background-color: #181825;
+                color: #cdd6f4;
+                border: 2px solid #45475a;
+                border-radius: 10px;
+                padding: 8px;
+            }
+            QListWidget::item {
+                padding: 12px;
+                border-radius: 6px;
+                margin: 3px;
+                background-color: #313244;
+            }
+            QListWidget::item:selected {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #89b4fa, stop:1 #74c7ec);
+                color: #1e1e2e;
+                font-weight: 600;
+            }
+            QListWidget::item:hover {
+                background-color: #45475a;
+            }
+            QScrollArea {
+                border: none;
+                background-color: transparent;
+            }
+            QScrollBar:vertical {
+                background-color: #181825;
+                width: 14px;
+                border-radius: 7px;
+            }
+            QScrollBar::handle:vertical {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #45475a, stop:1 #585b70);
+                border-radius: 7px;
+                min-height: 30px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                    stop:0 #585b70, stop:1 #6c7086);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
 
         # Initialize audio controller
         self.controller = AppController()
@@ -92,10 +247,13 @@ class CallAssistantApp(QMainWindow):
         self.setCentralWidget(central_widget)
 
         main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
 
         # Header
         header = QLabel("🎵 Call Assistant - Audio Soundboard")
-        header.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        header.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        header.setStyleSheet("color: #89b4fa;")
         main_layout.addWidget(header)
 
         # Tab widget
@@ -112,17 +270,45 @@ class CallAssistantApp(QMainWindow):
         """Create the soundboard tab"""
         widget = QWidget()
         layout = QVBoxLayout()
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(15)
 
         # Header with import button and stop all
         header_layout = QHBoxLayout()
-        header_layout.addWidget(QLabel("🎵 Your Audio Clips"))
+        
+        title = QLabel("🎵 Your Audio Clips")
+        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title.setStyleSheet("color: #b4befe;")
+        header_layout.addWidget(title)
         header_layout.addStretch()
 
         import_btn = QPushButton("📁 Import Clip")
+        import_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #a6e3a1, stop:1 #94e2d5);
+                color: #1e1e2e;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #b8f0b8, stop:1 #a9f0e5);
+            }
+        """)
         import_btn.clicked.connect(self.import_clip)
         header_layout.addWidget(import_btn)
 
         stop_all_btn = QPushButton("⏹️ Stop All")
+        stop_all_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f38ba8, stop:1 #eba0ac);
+                color: #1e1e2e;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ffa0b8, stop:1 #ffb0bc);
+            }
+        """)
         stop_all_btn.clicked.connect(self.stop_all)
         header_layout.addWidget(stop_all_btn)
 
@@ -135,7 +321,7 @@ class CallAssistantApp(QMainWindow):
         # Container for cards
         self.cards_container = QWidget()
         self.cards_layout = QGridLayout()
-        self.cards_layout.setSpacing(10)
+        self.cards_layout.setSpacing(15)
         self.cards_container.setLayout(self.cards_layout)
 
         scroll_area.setWidget(self.cards_container)
@@ -149,109 +335,119 @@ class CallAssistantApp(QMainWindow):
         card = QFrame()
         card.setStyleSheet("""
             QFrame {
-                border: 1px solid #444444;
-                border-radius: 6px;
-                background-color: #2d2d2d;
-                padding: 8px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #313244, stop:1 #292939);
+                border: 2px solid #45475a;
+                border-radius: 12px;
+                padding: 15px;
             }
             QFrame:hover {
-                border: 2px solid #0078d4;
-                background-color: #3a3a3a;
+                border: 2px solid #89b4fa;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #3a3d54, stop:1 #323349);
             }
         """)
-        card.setMaximumHeight(100)
+        card.setMinimumHeight(160)
+        card.setMaximumHeight(190)
 
         card_layout = QVBoxLayout()
-        card_layout.setContentsMargins(6, 6, 6, 6)
-        card_layout.setSpacing(6)
+        card_layout.setContentsMargins(15, 15, 15, 15)
+        card_layout.setSpacing(10)
 
-        # Clip name (white text, better visibility)
+        # Clip name
         name_label = QLabel(f"🎵 {clip_name}")
-        name_font = QFont()
-        name_font.setPointSize(10)
-        name_font.setBold(True)
+        name_font = QFont("Segoe UI", 16, QFont.Weight.Bold)
         name_label.setFont(name_font)
-        name_label.setStyleSheet("color: #ffffff; background-color: transparent;")
-        name_label.setMaximumHeight(24)
+        name_label.setStyleSheet("""
+            color: #ffffff;
+            background: transparent;
+            padding: 10px;
+            font-size: 16px;
+        """)
         name_label.setWordWrap(True)
         name_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         card_layout.addWidget(name_label)
 
-        # Buttons layout (compact)
-        buttons_layout = QHBoxLayout()
-        buttons_layout.setSpacing(4)
-        buttons_layout.setContentsMargins(0, 0, 0, 0)
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setStyleSheet("background-color: #45475a;")
+        separator.setMaximumHeight(1)
+        card_layout.addWidget(separator)
 
-        play_btn = QPushButton("▶️")
+        # Buttons layout
+        buttons_layout = QHBoxLayout()
+        buttons_layout.setSpacing(8)
+        buttons_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        play_btn = QPushButton("▶️ Play")
         play_btn.clicked.connect(lambda: self.controller.play_clip(clip_id))
-        play_btn.setMaximumWidth(42)
-        play_btn.setMaximumHeight(30)
-        play_btn.setToolTip("Play")
+        play_btn.setMinimumHeight(55)
+        play_btn.setMinimumWidth(80)
+        play_btn.setMaximumWidth(100)
         play_btn.setStyleSheet("""
             QPushButton {
-                background-color: #404040;
-                border: 1px solid #555555;
-                border-radius: 4px;
-                color: white;
-                font-size: 14px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #a6e3a1, stop:1 #94e2d5);
+                color: #1e1e2e;
+                border-radius: 8px;
+                font-weight: 700;
+                padding: 8px;
+                font-size: 11pt;
             }
             QPushButton:hover {
-                background-color: #0078d4;
-            }
-            QPushButton:pressed {
-                background-color: #005a9e;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #b8f0b8, stop:1 #a9f0e5);
             }
         """)
         buttons_layout.addWidget(play_btn)
 
-        stop_btn = QPushButton("⏸️")
+        stop_btn = QPushButton("⏸️ Stop")
         stop_btn.clicked.connect(lambda: self.controller.stop_clip(clip_id))
-        stop_btn.setMaximumWidth(42)
-        stop_btn.setMaximumHeight(30)
-        stop_btn.setToolTip("Stop")
+        stop_btn.setMinimumHeight(55)
+        stop_btn.setMinimumWidth(80)
+        stop_btn.setMaximumWidth(100)
         stop_btn.setStyleSheet("""
             QPushButton {
-                background-color: #404040;
-                border: 1px solid #555555;
-                border-radius: 4px;
-                color: white;
-                font-size: 14px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #fab387, stop:1 #f9e2af);
+                color: #1e1e2e;
+                border-radius: 8px;
+                font-weight: 700;
+                padding: 8px;
+                font-size: 11pt;
             }
             QPushButton:hover {
-                background-color: #d46d0c;
-            }
-            QPushButton:pressed {
-                background-color: #a85509;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ffc397, stop:1 #fff2bf);
             }
         """)
         buttons_layout.addWidget(stop_btn)
 
-        delete_btn = QPushButton("🗑️")
+        delete_btn = QPushButton("🗑️ Delete")
         delete_btn.clicked.connect(lambda: self.delete_clip_from_card(clip_id, clip_name))
-        delete_btn.setMaximumWidth(42)
-        delete_btn.setMaximumHeight(30)
-        delete_btn.setToolTip("Delete")
+        delete_btn.setMinimumHeight(55)
+        delete_btn.setMinimumWidth(65)
+        delete_btn.setMaximumWidth(120)
         delete_btn.setStyleSheet("""
             QPushButton {
-                background-color: #404040;
-                border: 1px solid #555555;
-                border-radius: 4px;
-                color: white;
-                font-size: 14px;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f38ba8, stop:1 #eba0ac);
+                color: #1e1e2e;
+                border-radius: 8px;
+                font-size: 11pt;
+                font-weight: 700;
+                padding: 8px;
+                text-align: center;
             }
             QPushButton:hover {
-                background-color: #c41e3a;
-            }
-            QPushButton:pressed {
-                background-color: #8b1528;
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ffa0b8, stop:1 #ffb0bc);
             }
         """)
         buttons_layout.addWidget(delete_btn)
 
-        buttons_layout.addStretch()
         card_layout.addLayout(buttons_layout)
-        card_layout.addStretch()
-
         card.setLayout(card_layout)
         return card
 
@@ -275,9 +471,17 @@ class CallAssistantApp(QMainWindow):
         """Create the controls tab"""
         widget = QWidget()
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(25)
+
+        # Title
+        title = QLabel("🎛️ Volume Controls")
+        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title.setStyleSheet("color: #b4befe;")
+        layout.addWidget(title)
 
         # Master Volume
-        layout.addWidget(QLabel("Master Volume:"))
+        layout.addWidget(QLabel("🔊 Master Volume:"))
         master_layout = QHBoxLayout()
         self.master_volume_slider = QSlider(Qt.Orientation.Horizontal)
         self.master_volume_slider.setMinimum(0)
@@ -286,6 +490,7 @@ class CallAssistantApp(QMainWindow):
         self.master_volume_slider.valueChanged.connect(self.set_master_volume)
         master_layout.addWidget(self.master_volume_slider)
         self.master_volume_label = QLabel("100%")
+        self.master_volume_label.setStyleSheet("color: #89b4fa; font-weight: bold; min-width: 50px;")
         master_layout.addWidget(self.master_volume_label)
         layout.addLayout(master_layout)
 
@@ -299,11 +504,12 @@ class CallAssistantApp(QMainWindow):
         self.mic_volume_slider.valueChanged.connect(self.set_mic_volume)
         mic_layout.addWidget(self.mic_volume_slider)
         self.mic_volume_label = QLabel("100%")
+        self.mic_volume_label.setStyleSheet("color: #89b4fa; font-weight: bold; min-width: 50px;")
         mic_layout.addWidget(self.mic_volume_label)
         layout.addLayout(mic_layout)
 
         # Clips Volume
-        layout.addWidget(QLabel("Clips Volume:"))
+        layout.addWidget(QLabel("🎵 Clips Volume:"))
         clips_layout = QHBoxLayout()
         self.clips_volume_slider = QSlider(Qt.Orientation.Horizontal)
         self.clips_volume_slider.setMinimum(0)
@@ -312,6 +518,7 @@ class CallAssistantApp(QMainWindow):
         self.clips_volume_slider.valueChanged.connect(self.set_clips_volume)
         clips_layout.addWidget(self.clips_volume_slider)
         self.clips_volume_label = QLabel("90%")
+        self.clips_volume_label.setStyleSheet("color: #89b4fa; font-weight: bold; min-width: 50px;")
         clips_layout.addWidget(self.clips_volume_label)
         layout.addLayout(clips_layout)
 
@@ -323,8 +530,13 @@ class CallAssistantApp(QMainWindow):
         """Create the hotkeys tab"""
         widget = QWidget()
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(20)
 
-        layout.addWidget(QLabel("⌨️ Assign Hotkeys to Clips"))
+        title = QLabel("⌨️ Keyboard Shortcuts")
+        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title.setStyleSheet("color: #b4befe;")
+        layout.addWidget(title)
 
         # Clips selection
         layout.addWidget(QLabel("Select Clip:"))
@@ -349,6 +561,16 @@ class CallAssistantApp(QMainWindow):
 
         # Remove hotkey button
         remove_btn = QPushButton("❌ Remove Selected Hotkey")
+        remove_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #f38ba8, stop:1 #eba0ac);
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ffa0b8, stop:1 #ffb0bc);
+            }
+        """)
         remove_btn.clicked.connect(self.remove_hotkey)
         layout.addWidget(remove_btn)
 
@@ -360,13 +582,18 @@ class CallAssistantApp(QMainWindow):
         """Create the settings tab"""
         widget = QWidget()
         layout = QVBoxLayout()
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(20)
 
-        layout.addWidget(QLabel("⚙️ Settings"))
-        layout.addWidget(QLabel("Version: 0.1.0"))
-        layout.addWidget(QLabel("Status: Ready"))
+        title = QLabel("⚙️ Settings")
+        title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title.setStyleSheet("color: #b4befe;")
+        layout.addWidget(title)
 
-        # Status info
-        self.status_label = QLabel("Loading...")
+        layout.addWidget(QLabel("📦 Version: 1.0.0 (Enhanced UI)"))
+        
+        self.status_label = QLabel("⚡ Loading...")
+        self.status_label.setStyleSheet("color: #89b4fa;")
         layout.addWidget(self.status_label)
 
         layout.addStretch()
@@ -398,10 +625,9 @@ class CallAssistantApp(QMainWindow):
             try:
                 self.controller.import_audio_file(file_path, clip_name)
                 self.refresh_clips()
-                QMessageBox.information(self, "Success", f"Imported '{clip_name}'")
+                QMessageBox.information(self, "Success", f"✅ Imported '{clip_name}'")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to import: {str(e)}")
-
 
     def refresh_clips(self):
         """Refresh the clips cards"""
@@ -414,7 +640,7 @@ class CallAssistantApp(QMainWindow):
 
             self.hotkey_clips_combo.clear()
 
-            # Create cards for each clip (2 columns for compact view)
+            # Create cards for each clip (3 columns)
             row = 0
             col = 0
             for clip_id, clip in self.controller.audio_mixer.clips.items():
@@ -422,7 +648,7 @@ class CallAssistantApp(QMainWindow):
                 self.cards_layout.addWidget(card, row, col)
 
                 col += 1
-                if col >= 2:
+                if col >= 3:  # Changed from 2 to 3 columns
                     col = 0
                     row += 1
 
@@ -474,17 +700,14 @@ class CallAssistantApp(QMainWindow):
         clip_id = self.hotkey_clips_combo.currentData()
         hotkey = self.hotkey_input.text().strip()
 
-        # Validate hotkey input
         if not hotkey:
             QMessageBox.warning(self, "Warning", "Please enter a hotkey")
             return
 
-        # Check for valid hotkey format (simple validation)
         if len(hotkey) < 2:
             QMessageBox.warning(self, "Warning", "Hotkey must be at least 2 characters (e.g., 'F1', 'ctrl+p')")
             return
 
-        # Warn if hotkey contains invalid characters
         valid_chars = set("abcdefghijklmnopqrstuvwxyz0123456789+-_* f")
         if not all(c.lower() in valid_chars for c in hotkey):
             QMessageBox.warning(self, "Warning", "Hotkey contains invalid characters. Use format like 'ctrl+alt+p' or 'F1'")
@@ -492,11 +715,11 @@ class CallAssistantApp(QMainWindow):
 
         try:
             if self.controller.assign_hotkey(clip_id, hotkey):
-                QMessageBox.information(self, "Success", f"Assigned hotkey '{hotkey}' to clip")
+                QMessageBox.information(self, "Success", f"✅ Assigned hotkey '{hotkey}'")
                 self.hotkey_input.clear()
                 self.refresh_hotkeys_list()
             else:
-                QMessageBox.critical(self, "Error", "Failed to assign hotkey - it may already be assigned to another clip")
+                QMessageBox.critical(self, "Error", "Failed to assign hotkey")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to assign hotkey: {str(e)}")
 
@@ -508,13 +731,11 @@ class CallAssistantApp(QMainWindow):
             return
 
         hotkey_text = current_item.text()
-        # Extract hotkey from display text (format: "Clip Name: hotkey")
         parts = hotkey_text.split(": ")
         if len(parts) < 2:
             return
 
         hotkey = parts[1]
-        # Find clip_id for this hotkey
         hotkey_mapping = self.controller.clip_manager.get_hotkey_mapping()
         clip_id = hotkey_mapping.get(hotkey)
 
@@ -524,7 +745,7 @@ class CallAssistantApp(QMainWindow):
 
         try:
             self.controller.unassign_hotkey(clip_id, hotkey)
-            QMessageBox.information(self, "Success", f"Removed hotkey '{hotkey}'")
+            QMessageBox.information(self, "Success", f"✅ Removed hotkey '{hotkey}'")
             self.refresh_hotkeys_list()
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to remove hotkey: {str(e)}")
@@ -548,7 +769,7 @@ class CallAssistantApp(QMainWindow):
         """Update status display"""
         try:
             self.status_label.setText(
-                f"Clips: {status['clips_loaded']} | "
+                f"⚡ Clips: {status['clips_loaded']} | "
                 f"Master: {int(status['master_volume']*100)}% | "
                 f"Mic: {int(status['mic_volume']*100)}% | "
                 f"Clips: {int(status['clip_volume']*100)}%"
