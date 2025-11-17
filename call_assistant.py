@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Talkless Desktop Audio Soundboard
+Call Assistant - Audio Soundboard for Live Calls
 Pure Python GUI using PyQt6 + PyAudio
 """
 
@@ -55,12 +55,12 @@ class AudioWorkerThread(QThread):
         self.wait()
 
 
-class TalklessApp(QMainWindow):
-    """Main Talkless desktop application"""
+class CallAssistantApp(QMainWindow):
+    """Main Call Assistant desktop application"""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Talkless - Audio Soundboard")
+        self.setWindowTitle("Call Assistant - Audio Soundboard for Live Calls")
         self.setGeometry(100, 100, 1200, 800)
 
         # Initialize audio controller
@@ -94,7 +94,7 @@ class TalklessApp(QMainWindow):
         main_layout = QVBoxLayout()
 
         # Header
-        header = QLabel("🎵 Talkless Audio Soundboard")
+        header = QLabel("🎵 Call Assistant - Audio Soundboard")
         header.setFont(QFont("Arial", 16, QFont.Weight.Bold))
         main_layout.addWidget(header)
 
@@ -474,15 +474,29 @@ class TalklessApp(QMainWindow):
         clip_id = self.hotkey_clips_combo.currentData()
         hotkey = self.hotkey_input.text().strip()
 
+        # Validate hotkey input
         if not hotkey:
             QMessageBox.warning(self, "Warning", "Please enter a hotkey")
             return
 
+        # Check for valid hotkey format (simple validation)
+        if len(hotkey) < 2:
+            QMessageBox.warning(self, "Warning", "Hotkey must be at least 2 characters (e.g., 'F1', 'ctrl+p')")
+            return
+
+        # Warn if hotkey contains invalid characters
+        valid_chars = set("abcdefghijklmnopqrstuvwxyz0123456789+-_* f")
+        if not all(c.lower() in valid_chars for c in hotkey):
+            QMessageBox.warning(self, "Warning", "Hotkey contains invalid characters. Use format like 'ctrl+alt+p' or 'F1'")
+            return
+
         try:
-            self.controller.assign_hotkey(clip_id, hotkey)
-            QMessageBox.information(self, "Success", f"Assigned hotkey '{hotkey}' to clip")
-            self.hotkey_input.clear()
-            self.refresh_hotkeys_list()
+            if self.controller.assign_hotkey(clip_id, hotkey):
+                QMessageBox.information(self, "Success", f"Assigned hotkey '{hotkey}' to clip")
+                self.hotkey_input.clear()
+                self.refresh_hotkeys_list()
+            else:
+                QMessageBox.critical(self, "Error", "Failed to assign hotkey - it may already be assigned to another clip")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to assign hotkey: {str(e)}")
 
@@ -557,7 +571,7 @@ class TalklessApp(QMainWindow):
 def main():
     """Main entry point"""
     app = QApplication(sys.argv)
-    window = TalklessApp()
+    window = CallAssistantApp()
     window.show()
     sys.exit(app.exec())
 

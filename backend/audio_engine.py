@@ -93,8 +93,8 @@ class VBCableManager:
             return default_input["index"]
         except OSError:
             p.terminate()
-            logger.warning("No input device available - returning -1 for testing mode")
-            return -1  # Return -1 to indicate no device available (testing mode)
+            logger.warning("No input device available - microphone input disabled")
+            return None  # Return None to indicate no device available
 
 
 class AudioMixer:
@@ -153,23 +153,27 @@ class AudioMixer:
 
         try:
             # Open input stream (microphone) - only if device available
-            if self.mic_device and self.mic_device >= 0:
-                self.input_stream = self.pyaudio_instance.open(
-                    format=AUDIO_FORMAT,
-                    channels=CHANNELS,
-                    rate=SAMPLE_RATE,
-                    input=True,
-                    input_device_index=self.mic_device,
-                    frames_per_buffer=CHUNK_SIZE,
-                    exception_on_overflow=False,
-                )
-                logger.info(f"Input stream opened on device {self.mic_device}")
+            if self.mic_device is not None:
+                try:
+                    self.input_stream = self.pyaudio_instance.open(
+                        format=AUDIO_FORMAT,
+                        channels=CHANNELS,
+                        rate=SAMPLE_RATE,
+                        input=True,
+                        input_device_index=self.mic_device,
+                        frames_per_buffer=CHUNK_SIZE,
+                        exception_on_overflow=False,
+                    )
+                    logger.info(f"Input stream opened on device {self.mic_device}")
+                except Exception as e:
+                    logger.warning(f"Failed to open microphone input: {e} - running without microphone")
+                    self.input_stream = None
             else:
                 logger.warning("No microphone device available - running without microphone input")
                 self.input_stream = None
 
             # Open output stream
-            if self.vb_cable_device and self.vb_cable_device >= 0:
+            if self.vb_cable_device is not None:
                 self.output_stream = self.pyaudio_instance.open(
                     format=AUDIO_FORMAT,
                     channels=CHANNELS,

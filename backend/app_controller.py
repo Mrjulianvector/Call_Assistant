@@ -5,6 +5,7 @@ Coordinates between UI, audio engine, clip manager, and hotkey system
 
 import logging
 from typing import Optional, Callable, Dict
+from pathlib import Path
 from .audio_engine import AudioMixer, AudioClip
 from .clip_manager import ClipManager
 from .hotkey_manager import HotkeyManager
@@ -151,15 +152,30 @@ class AppController:
         Returns:
             True if successful
         """
-        if not self.clip_manager.assign_hotkey(clip_id, hotkey_string):
+        # Validate hotkey input
+        if not hotkey_string or not hotkey_string.strip():
+            logger.error("Hotkey string cannot be empty")
+            return False
+
+        # Normalize hotkey to lowercase for consistency
+        hotkey_normalized = hotkey_string.strip().lower()
+
+        # Check if hotkey is already assigned to another clip
+        hotkey_mapping = self.clip_manager.get_hotkey_mapping()
+        for existing_hotkey, existing_clip_id in hotkey_mapping.items():
+            if existing_hotkey.lower() == hotkey_normalized and existing_clip_id != clip_id:
+                logger.error(f"Hotkey {hotkey_string} is already assigned to clip {existing_clip_id}")
+                return False
+
+        if not self.clip_manager.assign_hotkey(clip_id, hotkey_normalized):
             return False
 
         # Setup the hotkey in hotkey manager
         self.hotkey_manager.register_hotkey(
-            hotkey_string, lambda: self.audio_mixer.play_clip(clip_id)
+            hotkey_normalized, lambda: self.audio_mixer.play_clip(clip_id)
         )
 
-        logger.info(f"Assigned hotkey {hotkey_string} to clip {clip_id}")
+        logger.info(f"Assigned hotkey {hotkey_normalized} to clip {clip_id}")
         return True
 
     def unassign_hotkey(self, clip_id: str, hotkey_string: str) -> bool:

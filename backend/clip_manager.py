@@ -243,12 +243,36 @@ class ClipManager:
             with open(self.metadata_file, "r") as f:
                 data = json.load(f)
 
+            if not isinstance(data, dict):
+                logger.error("Invalid metadata format: expected dictionary")
+                return
+
+            loaded_count = 0
             for clip_id, meta_dict in data.items():
-                metadata = ClipMetadata(**meta_dict)
-                self.clips_metadata[clip_id] = metadata
+                try:
+                    # Validate required fields
+                    if not isinstance(meta_dict, dict):
+                        logger.warning(f"Skipping invalid metadata entry for {clip_id}: not a dictionary")
+                        continue
 
-            logger.info(f"Loaded metadata for {len(self.clips_metadata)} clips")
+                    # Check required fields
+                    required_fields = ["name", "path", "duration", "sample_rate", "channels"]
+                    for field in required_fields:
+                        if field not in meta_dict:
+                            logger.warning(f"Skipping metadata for {clip_id}: missing required field '{field}'")
+                            continue
 
+                    metadata = ClipMetadata(**meta_dict)
+                    self.clips_metadata[clip_id] = metadata
+                    loaded_count += 1
+                except Exception as e:
+                    logger.warning(f"Skipping invalid metadata entry for {clip_id}: {e}")
+                    continue
+
+            logger.info(f"Loaded metadata for {loaded_count} clips")
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Error parsing metadata JSON: {e}")
         except Exception as e:
             logger.error(f"Error loading metadata: {e}")
 

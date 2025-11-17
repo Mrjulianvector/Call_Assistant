@@ -40,7 +40,7 @@ class HotkeyManager:
             return False
 
         try:
-            self.listener = keyboard.Listener(on_press=self._on_key_press)
+            self.listener = keyboard.Listener(on_press=self._on_key_press, on_release=self._on_key_release)
             self.listener.start()
             self.is_listening = True
             logger.info("Hotkey listener started")
@@ -191,7 +191,7 @@ class HotkeyManager:
 
     def get_registered_hotkeys(self) -> Dict[str, str]:
         """Get all registered hotkeys"""
-        return list(self.hotkey_handlers.keys())
+        return self.hotkey_handlers.copy()
 
     def cleanup(self):
         """Clean up resources"""
