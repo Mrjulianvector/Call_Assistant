@@ -172,7 +172,7 @@ class AppController:
 
         # Setup the hotkey in hotkey manager
         self.hotkey_manager.register_hotkey(
-            hotkey_normalized, lambda: self.audio_mixer.play_clip(clip_id)
+            hotkey_normalized, lambda cid=clip_id: self.audio_mixer.play_clip(cid)
         )
 
         logger.info(f"Assigned hotkey {hotkey_normalized} to clip {clip_id}")

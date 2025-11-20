@@ -7,6 +7,7 @@ from pynput import keyboard
 from typing import Callable, Dict, Optional
 import logging
 import threading
+import sys
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -43,7 +44,8 @@ class HotkeyManager:
             self.listener = keyboard.Listener(on_press=self._on_key_press, on_release=self._on_key_release)
             self.listener.start()
             self.is_listening = True
-            logger.info("Hotkey listener started")
+            platform_info = "macOS" if sys.platform == "darwin" else sys.platform
+            logger.info(f"Hotkey listener started on {platform_info}")
             return True
 
         except Exception as e:
@@ -105,19 +107,43 @@ class HotkeyManager:
             # Get key representation
             try:
                 key_char = key.char
+                key_name = None
             except AttributeError:
-                key_char = key.name
+                key_char = None
+                key_name = key.name
+
+            # Log all key presses for debugging
+            logger.debug(f"Raw key press - char: {key_char}, name: {key_name}")
 
             # Add to pressed keys
             if key_char:
                 self.pressed_keys.add(key_char.lower())
 
+            # Handle special keys and modifiers
+            if key_name:
+                key_name_lower = key_name.lower()
+                self.pressed_keys.add(key_name_lower)
+                logger.info(f"🔑 Key pressed: {key_name_lower}")
+
+                # On macOS, detect cmd key press
+                if sys.platform == "darwin":
+                    if "cmd" in key_name_lower or "meta" in key_name_lower:
+                        self.pressed_keys.add("cmd")
+                    if "shift" in key_name_lower:
+                        self.pressed_keys.add("shift")
+                    if "ctrl" in key_name_lower or "control" in key_name_lower:
+                        self.pressed_keys.add("ctrl")
+                    if "alt" in key_name_lower or "option" in key_name_lower:
+                        self.pressed_keys.add("alt")
+
+            logger.debug(f"Current pressed keys: {self.pressed_keys}")
+
             # Check all registered hotkeys
             for hotkey_string, callback in self.hotkey_handlers.items():
                 if self._check_hotkey_match(hotkey_string):
                     try:
+                        logger.info(f"✅ Hotkey triggered: {hotkey_string}")
                         callback()
-                        logger.info(f"Hotkey triggered: {hotkey_string}")
 
                         if self.on_hotkey_pressed:
                             self.on_hotkey_pressed(hotkey_string)
@@ -133,11 +159,28 @@ class HotkeyManager:
         try:
             try:
                 key_char = key.char
+                key_name = None
             except AttributeError:
-                key_char = key.name
+                key_char = None
+                key_name = key.name
 
             if key_char:
                 self.pressed_keys.discard(key_char.lower())
+
+            if key_name:
+                key_name_lower = key_name.lower()
+                self.pressed_keys.discard(key_name_lower)
+
+                # On macOS, handle cmd key release
+                if sys.platform == "darwin":
+                    if "cmd" in key_name_lower or "meta" in key_name_lower:
+                        self.pressed_keys.discard("cmd")
+                    if "shift" in key_name_lower:
+                        self.pressed_keys.discard("shift")
+                    if "ctrl" in key_name_lower or "control" in key_name_lower:
+                        self.pressed_keys.discard("ctrl")
+                    if "alt" in key_name_lower or "option" in key_name_lower:
+                        self.pressed_keys.discard("alt")
 
         except Exception as e:
             logger.error(f"Error in key release handler: {e}")
@@ -184,8 +227,10 @@ class HotkeyManager:
             return False
 
         # Check if main key is pressed
-        if required_key and required_key not in self.pressed_keys:
-            return False
+        if required_key:
+            logger.debug(f"Looking for key '{required_key}' in pressed_keys: {self.pressed_keys}")
+            if required_key not in self.pressed_keys:
+                return False
 
         return True
 

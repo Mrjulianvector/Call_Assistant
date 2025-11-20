@@ -48,25 +48,41 @@ class VBCableManager:
     """Manages VB-Cable device detection and routing"""
 
     @staticmethod
-    def find_vb_cable_input_device() -> Optional[int]:
-        """Find VB-Cable Input device index"""
+    def find_output_device() -> Optional[int]:
+        """Find output device (prefer VB-Cable for virtual audio routing, fallback to speakers)"""
         p = pyaudio.PyAudio()
         device_count = p.get_device_count()
+
+        vb_cable_device = None
+        system_output_device = None
 
         for i in range(device_count):
             info = p.get_device_info_by_index(i)
             device_name = info.get("name", "").lower()
 
-            # Check for various VB-Cable naming conventions
-            if "vb" in device_name and "cable" in device_name:
-                if info.get("maxInputChannels", 0) > 0:
-                    logger.info(f"Found VB-Cable Input at device {i}: {info['name']}")
-                    p.terminate()
-                    return i
+            # Look for VB-Cable first (for virtual audio routing)
+            if info.get("maxOutputChannels", 0) > 0:
+                if "vb" in device_name and "cable" in device_name:
+                    vb_cable_device = i
+                    logger.info(f"Found VB-Cable at device {i}: {info['name']}")
+                    break
+                # Check for system speakers as backup
+                if any(x in device_name for x in ["speaker", "headphone", "airpods"]):
+                    system_output_device = i
+                    logger.info(f"Found system output at device {i}: {info['name']}")
 
         p.terminate()
-        logger.warning("VB-Cable Input device not found. Install VB-Audio Cable.")
-        return None
+
+        # Prefer VB-Cable for virtual call support, fallback to system output
+        if vb_cable_device is not None:
+            logger.info("Using VB-Cable for virtual audio routing")
+            return vb_cable_device
+        elif system_output_device is not None:
+            logger.warning("VB-Cable not found - using system speakers (virtual calls won't work)")
+            return system_output_device
+        else:
+            logger.warning("No output device found")
+            return None
 
     @staticmethod
     def find_microphone_device() -> Optional[int]:
@@ -114,20 +130,23 @@ class AudioMixer:
 
         # Find devices
         self.mic_device = VBCableManager.find_microphone_device()
-        self.vb_cable_device = VBCableManager.find_vb_cable_input_device()
+        self.output_device = VBCableManager.find_output_device()
 
-        # If VB-Cable not found, use default output device
-        if not self.vb_cable_device:
-            logger.warning("VB-Cable not found - using default system audio output")
+        # Also find system speakers for dual output
+        self.system_speakers_device = self._find_system_speakers()
+
+        # Fallback to default output if not found
+        if not self.output_device:
             try:
-                self.vb_cable_device = self.pyaudio_instance.get_default_output_device_info()["index"]
-                logger.info(f"Using default output device: {self.pyaudio_instance.get_device_info_by_index(self.vb_cable_device)['name']}")
+                self.output_device = self.pyaudio_instance.get_default_output_device_info()["index"]
+                logger.info(f"Using default output device: {self.pyaudio_instance.get_device_info_by_index(self.output_device)['name']}")
             except:
-                logger.warning("Could not find default output device")
+                logger.warning("Could not find any output device")
 
         # Audio streams
         self.input_stream = None
         self.output_stream = None
+        self.speakers_stream = None  # Secondary output for system speakers
 
         # Clip management
         self.clips: dict[str, AudioClip] = {}
@@ -145,6 +164,24 @@ class AudioMixer:
         self.clip_volume = 1.0
 
         logger.info("Audio Mixer initialized")
+
+    def _find_system_speakers(self) -> Optional[int]:
+        """Find system speakers device"""
+        p = pyaudio.PyAudio()
+        device_count = p.get_device_count()
+
+        for i in range(device_count):
+            info = p.get_device_info_by_index(i)
+            device_name = info.get("name", "").lower()
+
+            if info.get("maxOutputChannels", 0) > 0:
+                if any(x in device_name for x in ["speaker", "headphone", "airpods"]):
+                    p.terminate()
+                    logger.info(f"Found system speakers at device {i}: {info['name']}")
+                    return i
+
+        p.terminate()
+        return None
 
     def start(self) -> bool:
         """Start audio processing"""
@@ -173,20 +210,36 @@ class AudioMixer:
                 logger.warning("No microphone device available - running without microphone input")
                 self.input_stream = None
 
-            # Open output stream
-            if self.vb_cable_device is not None:
+            # Open primary output stream (VB-Cable for virtual calls)
+            if self.output_device is not None:
                 self.output_stream = self.pyaudio_instance.open(
                     format=AUDIO_FORMAT,
                     channels=CHANNELS,
                     rate=SAMPLE_RATE,
                     output=True,
-                    output_device_index=self.vb_cable_device,
+                    output_device_index=self.output_device,
                     frames_per_buffer=CHUNK_SIZE,
                 )
-                logger.info(f"Output stream opened on device {self.vb_cable_device}")
+                logger.info(f"Output stream opened on device {self.output_device}")
             else:
                 logger.error("No output device available - cannot start audio")
                 return False
+
+            # Open secondary output stream (system speakers) if available and different from primary
+            if self.system_speakers_device is not None and self.system_speakers_device != self.output_device:
+                try:
+                    self.speakers_stream = self.pyaudio_instance.open(
+                        format=AUDIO_FORMAT,
+                        channels=CHANNELS,
+                        rate=SAMPLE_RATE,
+                        output=True,
+                        output_device_index=self.system_speakers_device,
+                        frames_per_buffer=CHUNK_SIZE,
+                    )
+                    logger.info(f"Secondary speakers stream opened on device {self.system_speakers_device}")
+                except Exception as e:
+                    logger.warning(f"Failed to open secondary speakers stream: {e}")
+                    self.speakers_stream = None
 
             self.is_running = True
             self.stop_event.clear()
@@ -227,6 +280,9 @@ class AudioMixer:
             if self.output_stream:
                 self.output_stream.stop_stream()
                 self.output_stream.close()
+            if self.speakers_stream:
+                self.speakers_stream.stop_stream()
+                self.speakers_stream.close()
         except Exception as e:
             logger.error(f"Error closing streams: {e}")
 
@@ -358,13 +414,21 @@ class AudioMixer:
                 combined_signal = combined_signal * self.master_volume
                 combined_signal = np.clip(combined_signal, -1.0, 1.0)
 
-                # Send to output
+                # Send to output (both primary and speakers)
+                output_data = combined_signal.astype(np.float32)
+                output_bytes = output_data.tobytes()
+
                 if self.output_stream:
                     try:
-                        output_data = combined_signal.astype(np.float32)
-                        self.output_stream.write(output_data.tobytes())
+                        self.output_stream.write(output_bytes)
                     except Exception as e:
-                        logger.error(f"Error writing to output: {e}")
+                        logger.error(f"Error writing to primary output: {e}")
+
+                if self.speakers_stream:
+                    try:
+                        self.speakers_stream.write(output_bytes)
+                    except Exception as e:
+                        logger.error(f"Error writing to speakers: {e}")
 
         except Exception as e:
             logger.error(f"Audio loop error: {e}")

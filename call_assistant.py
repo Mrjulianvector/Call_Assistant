@@ -221,11 +221,11 @@ class CallAssistantApp(QMainWindow):
         # Initialize audio controller
         self.controller = AppController()
 
-        # Start audio mixer
-        if self.controller.audio_mixer.start():
-            logger.info("Audio mixer started successfully")
+        # Start the application (audio mixer + hotkey listener)
+        if self.controller.start():
+            logger.info("Application started successfully")
         else:
-            logger.warning("Failed to start audio mixer")
+            logger.warning("Failed to start application")
 
         # Worker thread for status updates
         self.worker = AudioWorkerThread(self.controller)
