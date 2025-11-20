@@ -11,6 +11,7 @@ from typing import Optional, Callable
 from dataclasses import dataclass
 from enum import Enum
 import logging
+import sys
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,8 +58,8 @@ class VBCableManager:
             device_name = info.get("name", "").lower()
 
             # Check for various VB-Cable naming conventions
-            if "vb-audio" in device_name and "cable" in device_name:
-                if info.get("maxOutputChannels", 0) > 0:
+            if "vb" in device_name and "cable" in device_name:
+                if info.get("maxInputChannels", 0) > 0:
                     logger.info(f"Found VB-Cable Input at device {i}: {info['name']}")
                     p.terminate()
                     return i
@@ -162,7 +163,7 @@ class AudioMixer:
                         input=True,
                         input_device_index=self.mic_device,
                         frames_per_buffer=CHUNK_SIZE,
-                        exception_on_overflow=False,
+                        stream_callback=None,
                     )
                     logger.info(f"Input stream opened on device {self.mic_device}")
                 except Exception as e:
@@ -325,6 +326,8 @@ class AudioMixer:
     def _audio_loop(self):
         """Main audio processing loop (runs in separate thread)"""
         logger.info("Audio loop started")
+        mic_error_count = 0
+        max_mic_errors = 10
 
         try:
             while not self.stop_event.is_set():
@@ -333,8 +336,13 @@ class AudioMixer:
                     try:
                         mic_data = self.input_stream.read(CHUNK_SIZE, exception_on_overflow=False)
                         mic_signal = np.frombuffer(mic_data, dtype=np.float32)
+                        mic_error_count = 0  # Reset error count on success
                     except Exception as e:
-                        logger.error(f"Error reading mic: {e}")
+                        mic_error_count += 1
+                        if mic_error_count <= max_mic_errors:
+                            logger.debug(f"Microphone read error ({mic_error_count}/{max_mic_errors}): {e}")
+                        elif mic_error_count == max_mic_errors + 1:
+                            logger.warning(f"Mic errors exceeded threshold, suppressing further warnings")
                         mic_signal = np.zeros(CHUNK_SIZE, dtype=np.float32)
                 else:
                     # No microphone input available
