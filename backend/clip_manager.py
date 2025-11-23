@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 SUPPORTED_FORMATS = {".mp3", ".wav", ".flac", ".ogg", ".m4a"}
-DEFAULT_SAMPLE_RATE = 44100
+DEFAULT_SAMPLE_RATE = 48000  # Matches system audio device sample rates
 
 
 @dataclass

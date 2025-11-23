@@ -17,8 +17,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Audio configuration constants
-SAMPLE_RATE = 44100
-CHUNK_SIZE = 512  # ~11ms at 44.1kHz (well under 20ms requirement)
+SAMPLE_RATE = 48000  # 48kHz matches most system audio devices
+CHUNK_SIZE = 512  # ~10.7ms at 48kHz (well under 20ms requirement)
 CHANNELS = 1
 AUDIO_FORMAT = pyaudio.paFloat32
 MAX_CLIPS = 10
@@ -49,39 +49,82 @@ class VBCableManager:
 
     @staticmethod
     def find_output_device() -> Optional[int]:
-        """Find output device (prefer VB-Cable for virtual audio routing, fallback to speakers)"""
+        """Find output device (prefer VB-Cable for virtual audio routing to calls)"""
         p = pyaudio.PyAudio()
         device_count = p.get_device_count()
 
         vb_cable_device = None
-        system_output_device = None
 
         for i in range(device_count):
             info = p.get_device_info_by_index(i)
             device_name = info.get("name", "").lower()
 
-            # Look for VB-Cable first (for virtual audio routing)
+            # Look for VB-Cable first (for virtual audio routing to calls)
             if info.get("maxOutputChannels", 0) > 0:
                 if "vb" in device_name and "cable" in device_name:
                     vb_cable_device = i
                     logger.info(f"Found VB-Cable at device {i}: {info['name']}")
                     break
-                # Check for system speakers as backup
-                if any(x in device_name for x in ["speaker", "headphone", "airpods"]):
-                    system_output_device = i
-                    logger.info(f"Found system output at device {i}: {info['name']}")
 
         p.terminate()
 
-        # Prefer VB-Cable for virtual call support, fallback to system output
         if vb_cable_device is not None:
-            logger.info("Using VB-Cable for virtual audio routing")
+            logger.info("Using VB-Cable for virtual audio routing to calls")
             return vb_cable_device
-        elif system_output_device is not None:
-            logger.warning("VB-Cable not found - using system speakers (virtual calls won't work)")
-            return system_output_device
         else:
-            logger.warning("No output device found")
+            logger.warning("No VB-Cable found")
+            return None
+
+    @staticmethod
+    def find_monitoring_device() -> Optional[int]:
+        """Find monitoring device (headphones/AirPods for user monitoring)"""
+        p = pyaudio.PyAudio()
+        device_count = p.get_device_count()
+
+        headphones_device = None
+        airpods_device = None
+        other_output = None
+
+        for i in range(device_count):
+            info = p.get_device_info_by_index(i)
+            device_name = info.get("name", "").lower()
+
+            # Check for output capability
+            if info.get("maxOutputChannels", 0) > 0:
+                # Prefer AirPods/EarPods for monitoring
+                if "earpods" in device_name or "airpods" in device_name:
+                    airpods_device = i
+                    logger.info(f"Found EarPods/AirPods at device {i}: {info['name']}")
+                    continue
+
+                # Then headphones
+                if "headphone" in device_name:
+                    headphones_device = i
+                    logger.info(f"Found headphones at device {i}: {info['name']}")
+                    continue
+
+                # Keep track of other devices (not VB-Cable, not speakers, not HDMI)
+                if ("vb" not in device_name and "speakers" not in device_name and
+                    "hdmi" not in device_name and "built-in" not in device_name and
+                    other_output is None):
+                    other_output = i
+
+        p.terminate()
+
+        # Prefer AirPods/EarPods for monitoring (user's headset)
+        if airpods_device is not None:
+            logger.info("Using AirPods/EarPods for user monitoring")
+            return airpods_device
+        # Then headphones
+        elif headphones_device is not None:
+            logger.info("Using headphones for user monitoring")
+            return headphones_device
+        # Then any other device
+        elif other_output is not None:
+            logger.info("Using alternative device for user monitoring")
+            return other_output
+        else:
+            logger.warning("No monitoring device found - user will not hear clips")
             return None
 
     @staticmethod
@@ -90,10 +133,10 @@ class VBCableManager:
         p = pyaudio.PyAudio()
         device_count = p.get_device_count()
 
+        # First, look for dedicated microphone device
         for i in range(device_count):
             info = p.get_device_info_by_index(i)
 
-            # Prefer device with "Microphone" in name or default input
             if (
                 info.get("maxInputChannels", 0) > 0
                 and "microphone" in info.get("name", "").lower()
@@ -102,15 +145,42 @@ class VBCableManager:
                 p.terminate()
                 return i
 
-        # Fall back to default input device
+        # Second, look for any input device that's NOT VB-Cable
+        for i in range(device_count):
+            info = p.get_device_info_by_index(i)
+            device_name = info.get("name", "").lower()
+
+            if (
+                info.get("maxInputChannels", 0) > 0
+                and "vb-cable" not in device_name
+                and "vb" not in device_name
+            ):
+                logger.info(f"Using input device: {info['name']}")
+                p.terminate()
+                return i
+
+        # Fall back to default input device (even if it's VB-Cable - with warning)
         try:
             default_input = p.get_default_input_device_info()
+            device_name = default_input.get("name", "").lower()
+
+            if "vb-cable" in device_name or "vb" in device_name:
+                logger.warning(
+                    f"⚠️ Using VB-Cable as input device: {default_input['name']}. "
+                    "This is likely wrong - you probably need a USB microphone or built-in mic. "
+                    "Check your audio device settings."
+                )
+            else:
+                logger.info(f"Using default input device: {default_input['name']}")
+
             p.terminate()
-            logger.info(f"Using default input device: {default_input['name']}")
             return default_input["index"]
         except OSError:
             p.terminate()
-            logger.warning("No input device available - microphone input disabled")
+            logger.error(
+                "❌ No input device available - microphone input disabled. "
+                "Please connect a microphone or USB audio device."
+            )
             return None  # Return None to indicate no device available
 
 
@@ -132,7 +202,10 @@ class AudioMixer:
         self.mic_device = VBCableManager.find_microphone_device()
         self.output_device = VBCableManager.find_output_device()
 
-        # Also find system speakers for dual output
+        # Find monitoring device (for user to hear clips - EarPods/headphones)
+        self.monitoring_device = VBCableManager.find_monitoring_device()
+
+        # Keep system speakers for fallback only
         self.system_speakers_device = self._find_system_speakers()
 
         # Fallback to default output if not found
@@ -225,21 +298,24 @@ class AudioMixer:
                 logger.error("No output device available - cannot start audio")
                 return False
 
-            # Open secondary output stream (system speakers) if available and different from primary
-            if self.system_speakers_device is not None and self.system_speakers_device != self.output_device:
+            # Open monitoring output stream (user's headphones/EarPods for local monitoring)
+            # This allows the user to hear their clips in real-time
+            if self.monitoring_device is not None and self.monitoring_device != self.output_device:
                 try:
                     self.speakers_stream = self.pyaudio_instance.open(
                         format=AUDIO_FORMAT,
                         channels=CHANNELS,
                         rate=SAMPLE_RATE,
                         output=True,
-                        output_device_index=self.system_speakers_device,
+                        output_device_index=self.monitoring_device,
                         frames_per_buffer=CHUNK_SIZE,
                     )
-                    logger.info(f"Secondary speakers stream opened on device {self.system_speakers_device}")
+                    logger.info(f"Monitoring stream opened on device {self.monitoring_device} (user's headphones/EarPods)")
                 except Exception as e:
-                    logger.warning(f"Failed to open secondary speakers stream: {e}")
+                    logger.warning(f"Failed to open monitoring stream to headphones: {e}")
                     self.speakers_stream = None
+            else:
+                logger.warning("No monitoring device available - user will not hear clips being played")
 
             self.is_running = True
             self.stop_event.clear()

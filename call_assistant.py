@@ -18,6 +18,7 @@ from PyQt6.QtGui import QIcon, QFont, QColor
 
 from backend.app_controller import AppController
 from backend.audio_engine import AudioClip
+from backend.audio_diagnostics import AudioDiagnostics
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -585,20 +586,214 @@ class CallAssistantApp(QMainWindow):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(20)
 
-        title = QLabel("⚙️ Settings")
+        # Title
+        title = QLabel("⚙️ Audio Device Settings")
         title.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
         title.setStyleSheet("color: #b4befe;")
         layout.addWidget(title)
 
-        layout.addWidget(QLabel("📦 Version: 1.0.0 (Enhanced UI)"))
-        
-        self.status_label = QLabel("⚡ Loading...")
-        self.status_label.setStyleSheet("color: #89b4fa;")
-        layout.addWidget(self.status_label)
+        # Run diagnostics button
+        diag_button = QPushButton("🔍 Run Audio Diagnostics")
+        diag_button.setStyleSheet("""
+            QPushButton {
+                background-color: #45475a;
+                color: #cdd6f4;
+                border: 2px solid #585b70;
+                border-radius: 8px;
+                padding: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #585b70;
+                border: 2px solid #74c7ec;
+            }
+        """)
+        diag_button.clicked.connect(self.run_diagnostics)
+        layout.addWidget(diag_button)
+
+        # Diagnostics output area
+        self.diag_output = QLabel()
+        self.diag_output.setWordWrap(True)
+        self.diag_output.setStyleSheet("color: #94e2d5; background-color: #1e1e2e; padding: 12px; border-radius: 8px; font-family: 'Courier New';")
+        layout.addWidget(self.diag_output)
+
+        # Device selection section
+        layout.addWidget(QLabel(""))  # Spacer
+
+        device_title = QLabel("📡 Device Configuration")
+        device_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        device_title.setStyleSheet("color: #b4befe;")
+        layout.addWidget(device_title)
+
+        # Input device selector
+        input_layout = QHBoxLayout()
+        input_layout.addWidget(QLabel("Microphone Input:"))
+        self.input_device_combo = QComboBox()
+        self.input_device_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #313244;
+                color: #cdd6f4;
+                border: 2px solid #45475a;
+                border-radius: 6px;
+                padding: 8px;
+            }
+            QComboBox::drop-down {
+                border: none;
+                background-color: #45475a;
+            }
+        """)
+        self.input_device_combo.currentTextChanged.connect(self.on_input_device_changed)
+        input_layout.addWidget(self.input_device_combo)
+        layout.addLayout(input_layout)
+
+        # Output device selector
+        output_layout = QHBoxLayout()
+        output_layout.addWidget(QLabel("Speaker Output:"))
+        self.output_device_combo = QComboBox()
+        self.output_device_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #313244;
+                color: #cdd6f4;
+                border: 2px solid #45475a;
+                border-radius: 6px;
+                padding: 8px;
+            }
+            QComboBox::drop-down {
+                border: none;
+                background-color: #45475a;
+            }
+        """)
+        self.output_device_combo.currentTextChanged.connect(self.on_output_device_changed)
+        output_layout.addWidget(self.output_device_combo)
+        layout.addLayout(output_layout)
+
+        # Recommendations section
+        rec_title = QLabel("💡 Recommendations")
+        rec_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        rec_title.setStyleSheet("color: #b4befe;")
+        layout.addWidget(rec_title)
+
+        self.recommendations_label = QLabel()
+        self.recommendations_label.setWordWrap(True)
+        self.recommendations_label.setStyleSheet("color: #f38ba8; background-color: #1e1e2e; padding: 12px; border-radius: 8px;")
+        layout.addWidget(self.recommendations_label)
+
+        # Info section
+        info_title = QLabel("ℹ️ Information")
+        info_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        info_title.setStyleSheet("color: #b4befe;")
+        layout.addWidget(info_title)
+
+        self.info_label = QLabel("📦 Version: 1.0.0\n🎵 Sample Rate: 48kHz\n⚡ Status: Ready")
+        self.info_label.setWordWrap(True)
+        self.info_label.setStyleSheet("color: #89b4fa; background-color: #1e1e2e; padding: 12px; border-radius: 8px;")
+        layout.addWidget(self.info_label)
 
         layout.addStretch()
+
+        # Load device list on startup
+        self.refresh_device_list()
+
         widget.setLayout(layout)
         return widget
+
+    def refresh_device_list(self):
+        """Refresh the list of audio devices"""
+        try:
+            diag = AudioDiagnostics()
+            report = diag.diagnose()
+
+            # Populate input devices
+            self.input_device_combo.blockSignals(True)
+            self.input_device_combo.clear()
+            for device in report['input_devices']:
+                self.input_device_combo.addItem(f"{device.name}", device.index)
+            if report['microphone']:
+                self.input_device_combo.setCurrentText(report['microphone'].name)
+            self.input_device_combo.blockSignals(False)
+
+            # Populate output devices
+            self.output_device_combo.blockSignals(True)
+            self.output_device_combo.clear()
+            for device in report['output_devices']:
+                self.output_device_combo.addItem(f"{device.name}", device.index)
+            if report['vbcable']:
+                self.output_device_combo.setCurrentText(report['vbcable'].name)
+            self.output_device_combo.blockSignals(False)
+
+            diag.cleanup()
+        except Exception as e:
+            logger.error(f"Error refreshing device list: {e}")
+
+    def run_diagnostics(self):
+        """Run full audio diagnostics and display report"""
+        try:
+            diag = AudioDiagnostics()
+            report = diag.diagnose()
+
+            # Build diagnostics output
+            output = "AUDIO DEVICE DIAGNOSTICS\n"
+            output += "=" * 40 + "\n\n"
+
+            output += "ALL DEVICES:\n"
+            for device in report['all_devices']:
+                io_info = f"In:{device.max_input_channels} Out:{device.max_output_channels}"
+                output += f"  Device {device.index}: {device.name}\n    ({io_info}, {device.sample_rate}Hz)\n"
+
+            output += "\nDETECTED:\n"
+            if report['vbcable']:
+                output += f"  ✓ VB-Cable: {report['vbcable'].name}\n"
+            else:
+                output += "  ✗ VB-Cable: NOT FOUND\n"
+
+            if report['microphone']:
+                output += f"  ✓ Microphone: {report['microphone'].name}\n"
+            else:
+                output += "  ✗ Microphone: NOT FOUND\n"
+
+            if report['builtin_speakers']:
+                output += f"  ✓ Speakers: {report['builtin_speakers'].name}\n"
+            else:
+                output += "  ✗ Speakers: NOT FOUND\n"
+
+            self.diag_output.setText(output)
+
+            # Build recommendations
+            recommendations = []
+            if not report['microphone']:
+                recommendations.append("⚠️ No dedicated microphone found. Connect a USB microphone or enable your system microphone.")
+
+            if report['default_input'] and "vb-cable" in report['default_input'].name.lower():
+                recommendations.append("⚠️ Default input is VB-Cable. Your microphone should be the input device, not VB-Cable.")
+
+            if not report['builtin_speakers'] or ("hdmi" in report['builtin_speakers'].name.lower()):
+                recommendations.append("⚠️ Wrong speaker output detected. Use Mac mini Speakers, not HDMI output.")
+
+            if not recommendations:
+                recommendations.append("✓ All audio devices appear to be configured correctly!")
+
+            self.recommendations_label.setText("\n".join(recommendations))
+
+            diag.cleanup()
+
+            QMessageBox.information(self, "Diagnostics Complete", "Audio diagnostics completed. See the output above.")
+        except Exception as e:
+            logger.error(f"Error running diagnostics: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to run diagnostics: {str(e)}")
+
+    def on_input_device_changed(self, device_name):
+        """Handle input device selection change"""
+        if device_name and self.sender() == self.input_device_combo:
+            device_index = self.input_device_combo.currentData()
+            logger.info(f"Selected input device: {device_name} (Index: {device_index})")
+            # Note: Actual device switching would require audio engine restart
+
+    def on_output_device_changed(self, device_name):
+        """Handle output device selection change"""
+        if device_name and self.sender() == self.output_device_combo:
+            device_index = self.output_device_combo.currentData()
+            logger.info(f"Selected output device: {device_name} (Index: {device_index})")
+            # Note: Actual device switching would require audio engine restart
 
     def import_clip(self):
         """Import an audio clip"""
@@ -768,12 +963,15 @@ class CallAssistantApp(QMainWindow):
     def update_status(self, status):
         """Update status display"""
         try:
-            self.status_label.setText(
-                f"⚡ Clips: {status['clips_loaded']} | "
-                f"Master: {int(status['master_volume']*100)}% | "
-                f"Mic: {int(status['mic_volume']*100)}% | "
-                f"Clips: {int(status['clip_volume']*100)}%"
-            )
+            if hasattr(self, 'info_label'):
+                self.info_label.setText(
+                    f"📦 Version: 1.0.0\n"
+                    f"🎵 Sample Rate: 48kHz\n"
+                    f"⚡ Clips Loaded: {status['clips_loaded']}\n"
+                    f"🔊 Master: {int(status['master_volume']*100)}% | "
+                    f"🎤 Mic: {int(status['mic_volume']*100)}% | "
+                    f"🎹 Clips: {int(status['clip_volume']*100)}%"
+                )
         except Exception as e:
             logger.error(f"Error updating status: {e}")
 
