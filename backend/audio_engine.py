@@ -55,24 +55,27 @@ class VBCableManager:
 
         vb_cable_device = None
 
+        logger.info(f"🔍 Scanning {device_count} devices for VB-Cable output...")
+
         for i in range(device_count):
             info = p.get_device_info_by_index(i)
             device_name = info.get("name", "").lower()
 
             # Look for VB-Cable first (for virtual audio routing to calls)
             if info.get("maxOutputChannels", 0) > 0:
+                logger.debug(f"  Device {i}: {info['name']} (output channels: {info.get('maxOutputChannels', 0)})")
                 if "vb" in device_name and "cable" in device_name:
                     vb_cable_device = i
-                    logger.info(f"Found VB-Cable at device {i}: {info['name']}")
+                    logger.info(f"✓ Found VB-Cable at device {i}: {info['name']}")
                     break
 
         p.terminate()
 
         if vb_cable_device is not None:
-            logger.info("Using VB-Cable for virtual audio routing to calls")
+            logger.info("✓ Using VB-Cable for virtual audio routing to calls")
             return vb_cable_device
         else:
-            logger.warning("No VB-Cable found")
+            logger.warning("✗ No VB-Cable found - clips will not be routed to calls")
             return None
 
     @staticmethod
@@ -82,11 +85,16 @@ class VBCableManager:
         device_count = p.get_device_count()
 
         headphones_device = None
+        realtek_device = None
         airpods_device = None
+        speakers_device = None
         other_output = None
 
-        # On Windows, prioritize Realtek and other stable devices
+        # On Windows, Bluetooth AirPods are unreliable - prioritize wired/Realtek devices
         is_windows = sys.platform == "win32"
+        platform_name = "Windows" if is_windows else "macOS"
+
+        logger.info(f"🔍 Scanning {device_count} devices for monitoring output on {platform_name}...")
 
         for i in range(device_count):
             try:
@@ -99,59 +107,100 @@ class VBCableManager:
 
                 # Check for output capability
                 if info.get("maxOutputChannels", 0) > 0:
-                    # On Windows, prefer Realtek and stable devices
-                    if is_windows and "realtek" in device_name:
-                        if "headphone" in device_name:
-                            if headphones_device is None:
-                                headphones_device = i
-                                logger.info(f"Found Realtek headphones at device {i}: {info['name']}")
+                    logger.debug(f"  Device {i}: {info['name']} (output)")
+
+                    # On Windows, prioritize Realtek (wired headphones)
+                    if is_windows and "realtek" in device_name and "headphone" in device_name:
+                        if realtek_device is None:
+                            realtek_device = i
+                            logger.info(f"  ✓ Found Realtek headphones at device {i}: {info['name']}")
                         continue
 
-                    # Prefer AirPods/EarPods for monitoring
-                    if "earpods" in device_name or "airpods" in device_name:
+                    # On macOS, prefer AirPods/EarPods
+                    if not is_windows and ("earpods" in device_name or "airpods" in device_name):
                         airpods_device = i
-                        logger.info(f"Found EarPods/AirPods at device {i}: {info['name']}")
+                        logger.info(f"  ✓ Found EarPods/AirPods at device {i}: {info['name']}")
                         continue
 
-                    # Then headphones
+                    # For Windows, still collect AirPods but deprioritize
+                    if "earpods" in device_name or "airpods" in device_name:
+                        if airpods_device is None:
+                            airpods_device = i
+                            logger.info(f"  ⚠ Found AirPods/EarPods at device {i}: {info['name']} (may be unreliable on Windows)")
+                        continue
+
+                    # Then regular headphones
                     if "headphone" in device_name:
                         if headphones_device is None:
                             headphones_device = i
-                            logger.info(f"Found headphones at device {i}: {info['name']}")
+                            logger.info(f"  ✓ Found headphones at device {i}: {info['name']}")
                         continue
 
-                    # Keep track of other devices (not VB-Cable, not speakers, not HDMI)
-                    if ("vb" not in device_name and "speakers" not in device_name and
-                        "hdmi" not in device_name and "built-in" not in device_name and
-                        other_output is None):
+                    # Look for speakers
+                    if "speaker" in device_name or "built-in" in device_name:
+                        if speakers_device is None:
+                            speakers_device = i
+                            logger.info(f"  🔊 Found speakers at device {i}: {info['name']}")
+                        continue
+
+                    # Keep track of other devices (not VB-Cable, not HDMI)
+                    if ("vb" not in device_name and "hdmi" not in device_name and other_output is None):
                         other_output = i
+                        logger.debug(f"  Other device at {i}: {info['name']}")
             except Exception as e:
                 logger.debug(f"Error processing device {i}: {e}")
                 continue
 
         p.terminate()
 
-        # Prefer AirPods/EarPods for monitoring (user's headset)
-        if airpods_device is not None:
-            logger.info("Using AirPods/EarPods for user monitoring")
-            return airpods_device
-        # Then headphones (Realtek on Windows, others on macOS)
-        elif headphones_device is not None:
-            logger.info("Using headphones for user monitoring")
-            return headphones_device
-        # Then any other device
-        elif other_output is not None:
-            logger.info("Using alternative device for user monitoring")
-            return other_output
+        # Priority order depends on OS
+        if is_windows:
+            # Windows: Realtek > regular headphones > speakers > other > AirPods (unreliable on Windows)
+            logger.info("📋 Windows priority: Realtek > Headphones > Speakers > Other > AirPods")
+            if realtek_device is not None:
+                logger.info(f"✓ Selected: Realtek headphones (device {realtek_device})")
+                return realtek_device
+            elif headphones_device is not None:
+                logger.info(f"✓ Selected: Headphones (device {headphones_device})")
+                return headphones_device
+            elif speakers_device is not None:
+                logger.info(f"✓ Selected: Built-in speakers (device {speakers_device})")
+                return speakers_device
+            elif other_output is not None:
+                logger.info(f"✓ Selected: Other output device (device {other_output})")
+                return other_output
+            elif airpods_device is not None:
+                logger.warning(f"⚠ Selected: AirPods/Bluetooth (device {airpods_device}) - may be unreliable")
+                return airpods_device
+            else:
+                logger.error("✗ No monitoring device found - user will not hear clips")
+                return None
         else:
-            logger.warning("No monitoring device found - user will not hear clips")
-            return None
+            # macOS: AirPods > headphones > speakers > other
+            logger.info("📋 macOS priority: AirPods > Headphones > Speakers > Other")
+            if airpods_device is not None:
+                logger.info(f"✓ Selected: AirPods/EarPods (device {airpods_device})")
+                return airpods_device
+            elif headphones_device is not None:
+                logger.info(f"✓ Selected: Headphones (device {headphones_device})")
+                return headphones_device
+            elif speakers_device is not None:
+                logger.info(f"✓ Selected: Built-in speakers (device {speakers_device})")
+                return speakers_device
+            elif other_output is not None:
+                logger.info(f"✓ Selected: Other output device (device {other_output})")
+                return other_output
+            else:
+                logger.error("✗ No monitoring device found - user will not hear clips")
+                return None
 
     @staticmethod
     def find_microphone_device() -> Optional[int]:
         """Find default microphone input device"""
         p = pyaudio.PyAudio()
         device_count = p.get_device_count()
+
+        logger.info(f"🔍 Scanning {device_count} devices for microphone input...")
 
         # First, look for dedicated microphone device
         for i in range(device_count):
@@ -161,7 +210,7 @@ class VBCableManager:
                 info.get("maxInputChannels", 0) > 0
                 and "microphone" in info.get("name", "").lower()
             ):
-                logger.info(f"Found Microphone at device {i}: {info['name']}")
+                logger.info(f"✓ Found dedicated Microphone at device {i}: {info['name']}")
                 p.terminate()
                 return i
 
@@ -175,7 +224,7 @@ class VBCableManager:
                 and "vb-cable" not in device_name
                 and "vb" not in device_name
             ):
-                logger.info(f"Using input device: {info['name']}")
+                logger.info(f"✓ Using input device: {info['name']} (device {i})")
                 p.terminate()
                 return i
 
@@ -191,7 +240,7 @@ class VBCableManager:
                     "Check your audio device settings."
                 )
             else:
-                logger.info(f"Using default input device: {default_input['name']}")
+                logger.info(f"✓ Using default input device: {default_input['name']} (device {default_input['index']})")
 
             p.terminate()
             return default_input["index"]
@@ -218,6 +267,10 @@ class AudioMixer:
         self.status_callback = status_callback
         self.state = AudioState.STOPPED
 
+        logger.info("="*60)
+        logger.info("🎵 AUDIO MIXER INITIALIZATION")
+        logger.info("="*60)
+
         # Find devices
         self.mic_device = VBCableManager.find_microphone_device()
         self.output_device = VBCableManager.find_output_device()
@@ -232,9 +285,9 @@ class AudioMixer:
         if not self.output_device:
             try:
                 self.output_device = self.pyaudio_instance.get_default_output_device_info()["index"]
-                logger.info(f"Using default output device: {self.pyaudio_instance.get_device_info_by_index(self.output_device)['name']}")
+                logger.info(f"✓ Using default output device: {self.pyaudio_instance.get_device_info_by_index(self.output_device)['name']}")
             except:
-                logger.warning("Could not find any output device")
+                logger.warning("✗ Could not find any output device")
 
         # Audio streams
         self.input_stream = None
@@ -256,7 +309,14 @@ class AudioMixer:
         self.mic_volume = 1.0
         self.clip_volume = 1.0
 
-        logger.info("Audio Mixer initialized")
+        # Log device summary
+        logger.info("="*60)
+        logger.info("📋 DEVICE CONFIGURATION SUMMARY:")
+        logger.info(f"  Microphone Input:     Device {self.mic_device}" if self.mic_device is not None else "  Microphone Input:     DISABLED")
+        logger.info(f"  Call Output (VB-Cable): Device {self.output_device}" if self.output_device is not None else "  Call Output:          NOT FOUND")
+        logger.info(f"  Local Monitoring:     Device {self.monitoring_device}" if self.monitoring_device is not None else "  Local Monitoring:     NOT FOUND")
+        logger.info("="*60)
+        logger.info("✓ Audio Mixer initialized")
 
     def _find_system_speakers(self) -> Optional[int]:
         """Find system speakers device"""
@@ -274,6 +334,99 @@ class AudioMixer:
                     return i
 
         p.terminate()
+        return None
+
+    def _open_monitoring_stream_with_fallback(self):
+        """
+        Try to open monitoring stream with multiple fallbacks.
+        On Windows, tries multiple devices if the first one fails.
+        Falls back to built-in speakers if headphones not available.
+        """
+        devices_to_try = []
+
+        # Add primary monitoring device first
+        if self.monitoring_device is not None:
+            devices_to_try.append(self.monitoring_device)
+            logger.info(f"📢 Primary monitoring device: {self.monitoring_device}")
+
+        # On Windows, add comprehensive fallback devices
+        if sys.platform == "win32":
+            logger.info("🔧 Building fallback device list for Windows...")
+            # Try default output device
+            try:
+                default_output_info = self.pyaudio_instance.get_default_output_device_info()
+                default_device = default_output_info["index"]
+                if default_device != self.output_device and default_device not in devices_to_try:
+                    devices_to_try.append(default_device)
+                    logger.info(f"  Added fallback: Default device {default_device}")
+            except Exception as e:
+                logger.debug(f"  Could not get default output: {e}")
+
+            # Collect all possible output devices organized by type
+            realtek_devices = []
+            headphone_devices = []
+            speaker_devices = []
+            other_devices = []
+
+            try:
+                p = pyaudio.PyAudio()
+                for i in range(p.get_device_count()):
+                    info = p.get_device_info_by_index(i)
+                    if info.get("maxOutputChannels", 0) > 0 and i != self.output_device and i not in devices_to_try:
+                        try:
+                            device_name = info.get("name", "").lower()
+                        except:
+                            device_name = str(info.get("name", "")).lower()
+
+                        # Categorize devices
+                        if "realtek" in device_name:
+                            if "headphone" in device_name:
+                                realtek_devices.append(i)
+                                logger.info(f"  Added fallback: Realtek headphones (device {i})")
+                            else:
+                                realtek_devices.append(i)
+                                logger.info(f"  Added fallback: Realtek device (device {i})")
+                        elif "headphone" in device_name:
+                            headphone_devices.append(i)
+                            logger.info(f"  Added fallback: Headphones (device {i})")
+                        elif "speaker" in device_name or "built-in" in device_name:
+                            speaker_devices.append(i)
+                            logger.info(f"  Added fallback: Speakers (device {i})")
+                        else:
+                            other_devices.append(i)
+                            logger.debug(f"  Added fallback: Other device {i}")
+                p.terminate()
+            except Exception as e:
+                logger.debug(f"Error collecting fallback devices: {e}")
+
+            # Add in priority order: Realtek > Headphones > Speakers > Others
+            devices_to_try.extend(realtek_devices)
+            devices_to_try.extend(headphone_devices)
+            devices_to_try.extend(speaker_devices)
+            devices_to_try.extend(other_devices)
+
+        logger.info(f"🔄 Attempting to open monitoring stream on {len(devices_to_try)} device(s)...")
+        # Try each device in order
+        for idx, device_id in enumerate(devices_to_try, 1):
+            try:
+                device_info = self.pyaudio_instance.get_device_info_by_index(device_id)
+                logger.info(f"  [{idx}/{len(devices_to_try)}] Trying device {device_id}: {device_info['name']}")
+                stream = self.pyaudio_instance.open(
+                    format=AUDIO_FORMAT,
+                    channels=CHANNELS,
+                    rate=SAMPLE_RATE,
+                    output=True,
+                    output_device_index=device_id,
+                    frames_per_buffer=CHUNK_SIZE,
+                )
+                logger.info(f"✅ SUCCESS! Monitoring stream opened on device {device_id}: {device_info['name']}")
+                return stream
+            except Exception as e:
+                logger.warning(f"  ✗ Failed on device {device_id}: {type(e).__name__}: {e}")
+                continue
+
+        # If all devices failed
+        logger.error("❌ Could not open monitoring stream on ANY device - audio will be sent ONLY to VB-Cable")
         return None
 
     def start(self) -> bool:
@@ -321,54 +474,14 @@ class AudioMixer:
             # Open monitoring output stream (user's headphones/EarPods for local monitoring)
             # This allows the user to hear their clips in real-time
             if self.monitoring_device is not None and self.monitoring_device != self.output_device:
-                try:
-                    self.speakers_stream = self.pyaudio_instance.open(
-                        format=AUDIO_FORMAT,
-                        channels=CHANNELS,
-                        rate=SAMPLE_RATE,
-                        output=True,
-                        output_device_index=self.monitoring_device,
-                        frames_per_buffer=CHUNK_SIZE,
-                    )
-                    logger.info(f"Monitoring stream opened on device {self.monitoring_device} (user's headphones/EarPods)")
-                except OSError as e:
-                    # Windows PortAudio error -9999: Unanticipated host error
-                    # Usually means the device changed or isn't available at stream opening time
-                    logger.debug(f"Failed to open monitoring stream on device {self.monitoring_device}: {e}")
-                    logger.info("Attempting to use default output device for monitoring...")
-
-                    # Try fallback: use default output device for monitoring
-                    try:
-                        default_output_info = self.pyaudio_instance.get_default_output_device_info()
-                        default_output_index = default_output_info["index"]
-
-                        if default_output_index != self.output_device:
-                            self.speakers_stream = self.pyaudio_instance.open(
-                                format=AUDIO_FORMAT,
-                                channels=CHANNELS,
-                                rate=SAMPLE_RATE,
-                                output=True,
-                                output_device_index=default_output_index,
-                                frames_per_buffer=CHUNK_SIZE,
-                            )
-                            logger.info(f"Using fallback monitoring device {default_output_index}")
-                        else:
-                            logger.info("Fallback device is same as main output - skipping monitoring stream")
-                            self.speakers_stream = None
-                    except Exception as fallback_e:
-                        logger.debug(f"Fallback monitoring stream also failed: {fallback_e}")
-                        logger.info("Continuing without local monitoring - audio will still be sent to VB-Cable")
-                        self.speakers_stream = None
-
-                except Exception as e:
-                    logger.debug(f"Unexpected error opening monitoring stream: {e}")
-                    logger.info("Continuing without local monitoring - audio will still be sent to VB-Cable")
-                    self.speakers_stream = None
+                self.speakers_stream = self._open_monitoring_stream_with_fallback()
             else:
                 if self.monitoring_device is None:
                     logger.info("No monitoring device found - audio will be sent only to VB-Cable")
+                    self.speakers_stream = None
                 else:
                     logger.info("Monitoring device same as output device - single stream will be used")
+                    self.speakers_stream = None
 
             self.is_running = True
             self.stop_event.clear()
