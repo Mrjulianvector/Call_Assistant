@@ -411,22 +411,76 @@ class AudioMixer:
             try:
                 device_info = self.pyaudio_instance.get_device_info_by_index(device_id)
                 logger.info(f"  [{idx}/{len(devices_to_try)}] Trying device {device_id}: {device_info['name']}")
-                stream = self.pyaudio_instance.open(
-                    format=AUDIO_FORMAT,
-                    channels=CHANNELS,
-                    rate=SAMPLE_RATE,
-                    output=True,
-                    output_device_index=device_id,
-                    frames_per_buffer=CHUNK_SIZE,
-                )
-                logger.info(f"✅ SUCCESS! Monitoring stream opened on device {device_id}: {device_info['name']}")
-                return stream
+
+                # Try with standard parameters first
+                try:
+                    stream = self.pyaudio_instance.open(
+                        format=AUDIO_FORMAT,
+                        channels=CHANNELS,
+                        rate=SAMPLE_RATE,
+                        output=True,
+                        output_device_index=device_id,
+                        frames_per_buffer=CHUNK_SIZE,
+                    )
+                    logger.info(f"✅ SUCCESS! Monitoring stream opened on device {device_id}: {device_info['name']}")
+                    return stream
+                except OSError as e:
+                    # On Windows, try with device's native settings if standard params fail
+                    if sys.platform == "win32" and device_info.get("maxOutputChannels", 0) > 0:
+                        logger.debug(f"    Standard settings failed, trying device defaults...")
+                        try:
+                            stream = self.pyaudio_instance.open(
+                                format=AUDIO_FORMAT,
+                                channels=min(CHANNELS, device_info.get("maxOutputChannels", 1)),
+                                rate=int(device_info.get("defaultSampleRate", SAMPLE_RATE)),
+                                output=True,
+                                output_device_index=device_id,
+                                frames_per_buffer=CHUNK_SIZE,
+                            )
+                            logger.info(f"✅ SUCCESS! Monitoring stream opened on device {device_id} (with device defaults)")
+                            return stream
+                        except Exception as fallback_e:
+                            raise e  # Re-raise original error if fallback fails
+                    else:
+                        raise
+
+            except OSError as e:
+                # Common Windows errors
+                error_code = str(e)
+                if "-9999" in error_code:
+                    logger.warning(f"  ✗ Device {device_id}: Host error (disconnected/in use)")
+                elif "-9985" in error_code:
+                    logger.warning(f"  ✗ Device {device_id}: Unavailable")
+                else:
+                    logger.warning(f"  ✗ Device {device_id}: {e}")
+                continue
             except Exception as e:
-                logger.warning(f"  ✗ Failed on device {device_id}: {type(e).__name__}: {e}")
+                logger.debug(f"  ✗ Device {device_id}: {type(e).__name__}")
                 continue
 
-        # If all devices failed
+        # Last resort: try the absolute default output device
+        logger.warning("🔄 Trying system default output device as last resort...")
+        try:
+            default_info = self.pyaudio_instance.get_default_output_device_info()
+            default_id = default_info["index"]
+            if default_id not in devices_to_try and default_id != self.output_device:
+                logger.info(f"  Trying default device {default_id}: {default_info['name']}")
+                stream = self.pyaudio_instance.open(
+                    format=AUDIO_FORMAT,
+                    channels=min(CHANNELS, default_info.get("maxOutputChannels", 1)),
+                    rate=int(default_info.get("defaultSampleRate", SAMPLE_RATE)),
+                    output=True,
+                    output_device_index=default_id,
+                    frames_per_buffer=CHUNK_SIZE,
+                )
+                logger.info(f"✅ SUCCESS! Using system default device {default_id}")
+                return stream
+        except Exception as e:
+            logger.warning(f"  Default device also failed: {e}")
+
+        # If everything failed
         logger.error("❌ Could not open monitoring stream on ANY device - audio will be sent ONLY to VB-Cable")
+        logger.error("⚠️  User will NOT hear the clips being played (but others will hear them in the call)")
         return None
 
     def start(self) -> bool:
