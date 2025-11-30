@@ -85,6 +85,9 @@ class VBCableManager:
         airpods_device = None
         other_output = None
 
+        # On Windows, prioritize Realtek and other stable devices
+        is_windows = sys.platform == "win32"
+
         for i in range(device_count):
             try:
                 info = p.get_device_info_by_index(i)
@@ -96,6 +99,14 @@ class VBCableManager:
 
                 # Check for output capability
                 if info.get("maxOutputChannels", 0) > 0:
+                    # On Windows, prefer Realtek and stable devices
+                    if is_windows and "realtek" in device_name:
+                        if "headphone" in device_name:
+                            if headphones_device is None:
+                                headphones_device = i
+                                logger.info(f"Found Realtek headphones at device {i}: {info['name']}")
+                        continue
+
                     # Prefer AirPods/EarPods for monitoring
                     if "earpods" in device_name or "airpods" in device_name:
                         airpods_device = i
@@ -104,8 +115,9 @@ class VBCableManager:
 
                     # Then headphones
                     if "headphone" in device_name:
-                        headphones_device = i
-                        logger.info(f"Found headphones at device {i}: {info['name']}")
+                        if headphones_device is None:
+                            headphones_device = i
+                            logger.info(f"Found headphones at device {i}: {info['name']}")
                         continue
 
                     # Keep track of other devices (not VB-Cable, not speakers, not HDMI)
@@ -123,7 +135,7 @@ class VBCableManager:
         if airpods_device is not None:
             logger.info("Using AirPods/EarPods for user monitoring")
             return airpods_device
-        # Then headphones
+        # Then headphones (Realtek on Windows, others on macOS)
         elif headphones_device is not None:
             logger.info("Using headphones for user monitoring")
             return headphones_device
@@ -322,9 +334,32 @@ class AudioMixer:
                 except OSError as e:
                     # Windows PortAudio error -9999: Unanticipated host error
                     # Usually means the device changed or isn't available at stream opening time
-                    logger.debug(f"Failed to open monitoring stream (device may be unavailable): {e}")
-                    logger.info("Continuing without local monitoring - audio will still be sent to VB-Cable")
-                    self.speakers_stream = None
+                    logger.debug(f"Failed to open monitoring stream on device {self.monitoring_device}: {e}")
+                    logger.info("Attempting to use default output device for monitoring...")
+
+                    # Try fallback: use default output device for monitoring
+                    try:
+                        default_output_info = self.pyaudio_instance.get_default_output_device_info()
+                        default_output_index = default_output_info["index"]
+
+                        if default_output_index != self.output_device:
+                            self.speakers_stream = self.pyaudio_instance.open(
+                                format=AUDIO_FORMAT,
+                                channels=CHANNELS,
+                                rate=SAMPLE_RATE,
+                                output=True,
+                                output_device_index=default_output_index,
+                                frames_per_buffer=CHUNK_SIZE,
+                            )
+                            logger.info(f"Using fallback monitoring device {default_output_index}")
+                        else:
+                            logger.info("Fallback device is same as main output - skipping monitoring stream")
+                            self.speakers_stream = None
+                    except Exception as fallback_e:
+                        logger.debug(f"Fallback monitoring stream also failed: {fallback_e}")
+                        logger.info("Continuing without local monitoring - audio will still be sent to VB-Cable")
+                        self.speakers_stream = None
+
                 except Exception as e:
                     logger.debug(f"Unexpected error opening monitoring stream: {e}")
                     logger.info("Continuing without local monitoring - audio will still be sent to VB-Cable")
