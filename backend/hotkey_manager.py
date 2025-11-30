@@ -74,6 +74,7 @@ class HotkeyManager:
 
         Args:
             hotkey_string: Hotkey string (e.g., "ctrl+alt+p", "F1", "ctrl+shift+m")
+                          On Windows, 'cmd' and 'super' are converted to 'ctrl' since Windows uses Ctrl instead of Cmd
             callback: Function to call when hotkey is pressed
 
         Returns:
@@ -84,7 +85,15 @@ class HotkeyManager:
             return False
 
         try:
-            self.hotkey_handlers[hotkey_string.lower()] = callback
+            # Convert macOS cmd to Windows ctrl for cross-platform compatibility
+            adjusted_hotkey = hotkey_string.lower()
+            if sys.platform == "win32":
+                # On Windows, replace cmd/super with ctrl
+                adjusted_hotkey = adjusted_hotkey.replace("cmd+", "ctrl+").replace("super+", "ctrl+")
+                if hotkey_string.lower() != adjusted_hotkey:
+                    logger.info(f"Converted hotkey '{hotkey_string}' to '{adjusted_hotkey}' for Windows")
+
+            self.hotkey_handlers[adjusted_hotkey] = callback
             logger.info(f"Hotkey registered: {hotkey_string}")
             return True
 
@@ -212,7 +221,11 @@ class HotkeyManager:
             elif part in ["shift"]:
                 required_modifiers.add("shift")
             elif part in ["cmd", "command", "super"]:
-                required_modifiers.add("cmd")
+                # On Windows, cmd/super maps to ctrl; on macOS it's cmd
+                if sys.platform == "win32":
+                    required_modifiers.add("ctrl")
+                else:
+                    required_modifiers.add("cmd")
             else:
                 required_key = part
 

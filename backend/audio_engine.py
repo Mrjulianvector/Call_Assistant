@@ -86,28 +86,36 @@ class VBCableManager:
         other_output = None
 
         for i in range(device_count):
-            info = p.get_device_info_by_index(i)
-            device_name = info.get("name", "").lower()
+            try:
+                info = p.get_device_info_by_index(i)
+                # Safely decode device name, handling encoding issues on Windows
+                try:
+                    device_name = info.get("name", "").lower()
+                except (UnicodeDecodeError, UnicodeEncodeError):
+                    device_name = str(info.get("name", "")).lower()
 
-            # Check for output capability
-            if info.get("maxOutputChannels", 0) > 0:
-                # Prefer AirPods/EarPods for monitoring
-                if "earpods" in device_name or "airpods" in device_name:
-                    airpods_device = i
-                    logger.info(f"Found EarPods/AirPods at device {i}: {info['name']}")
-                    continue
+                # Check for output capability
+                if info.get("maxOutputChannels", 0) > 0:
+                    # Prefer AirPods/EarPods for monitoring
+                    if "earpods" in device_name or "airpods" in device_name:
+                        airpods_device = i
+                        logger.info(f"Found EarPods/AirPods at device {i}: {info['name']}")
+                        continue
 
-                # Then headphones
-                if "headphone" in device_name:
-                    headphones_device = i
-                    logger.info(f"Found headphones at device {i}: {info['name']}")
-                    continue
+                    # Then headphones
+                    if "headphone" in device_name:
+                        headphones_device = i
+                        logger.info(f"Found headphones at device {i}: {info['name']}")
+                        continue
 
-                # Keep track of other devices (not VB-Cable, not speakers, not HDMI)
-                if ("vb" not in device_name and "speakers" not in device_name and
-                    "hdmi" not in device_name and "built-in" not in device_name and
-                    other_output is None):
-                    other_output = i
+                    # Keep track of other devices (not VB-Cable, not speakers, not HDMI)
+                    if ("vb" not in device_name and "speakers" not in device_name and
+                        "hdmi" not in device_name and "built-in" not in device_name and
+                        other_output is None):
+                        other_output = i
+            except Exception as e:
+                logger.debug(f"Error processing device {i}: {e}")
+                continue
 
         p.terminate()
 
@@ -311,11 +319,21 @@ class AudioMixer:
                         frames_per_buffer=CHUNK_SIZE,
                     )
                     logger.info(f"Monitoring stream opened on device {self.monitoring_device} (user's headphones/EarPods)")
+                except OSError as e:
+                    # Windows PortAudio error -9999: Unanticipated host error
+                    # Usually means the device changed or isn't available at stream opening time
+                    logger.debug(f"Failed to open monitoring stream (device may be unavailable): {e}")
+                    logger.info("Continuing without local monitoring - audio will still be sent to VB-Cable")
+                    self.speakers_stream = None
                 except Exception as e:
-                    logger.warning(f"Failed to open monitoring stream to headphones: {e}")
+                    logger.debug(f"Unexpected error opening monitoring stream: {e}")
+                    logger.info("Continuing without local monitoring - audio will still be sent to VB-Cable")
                     self.speakers_stream = None
             else:
-                logger.warning("No monitoring device available - user will not hear clips being played")
+                if self.monitoring_device is None:
+                    logger.info("No monitoring device found - audio will be sent only to VB-Cable")
+                else:
+                    logger.info("Monitoring device same as output device - single stream will be used")
 
             self.is_running = True
             self.stop_event.clear()
