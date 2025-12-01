@@ -703,26 +703,32 @@ class AudioMixer:
                 # Mix active clips
                 mixed_clips = self._mix_clips(CHUNK_SIZE)
 
-                # Combine signals: microphone + clips
-                combined_signal = (mic_signal * self.mic_volume) + (mixed_clips * self.clip_volume)
+                # Combine signals: microphone + clips FOR CALL OUTPUT
+                call_signal = (mic_signal * self.mic_volume) + (mixed_clips * self.clip_volume)
 
                 # Apply master volume and prevent clipping
-                combined_signal = combined_signal * self.master_volume
-                combined_signal = np.clip(combined_signal, -1.0, 1.0)
+                call_signal = call_signal * self.master_volume
+                call_signal = np.clip(call_signal, -1.0, 1.0)
 
-                # Send to output (both primary and speakers)
-                output_data = combined_signal.astype(np.float32)
-                output_bytes = output_data.tobytes()
+                # For local monitoring, send ONLY the clips (not microphone) to avoid echo
+                monitoring_signal = mixed_clips * self.clip_volume * self.master_volume
+                monitoring_signal = np.clip(monitoring_signal, -1.0, 1.0)
+
+                # Send call output to VB-Cable (microphone + clips for the call)
+                call_output_data = call_signal.astype(np.float32)
+                call_output_bytes = call_output_data.tobytes()
 
                 if self.output_stream:
                     try:
-                        self.output_stream.write(output_bytes)
+                        self.output_stream.write(call_output_bytes)
                     except Exception as e:
                         logger.error(f"Error writing to primary output: {e}")
 
+                # Send monitoring output to headphones/speakers (clips only, no microphone)
                 if self.speakers_stream:
                     try:
-                        self.speakers_stream.write(output_bytes)
+                        monitoring_output_bytes = monitoring_signal.astype(np.float32).tobytes()
+                        self.speakers_stream.write(monitoring_output_bytes)
                     except Exception as e:
                         logger.error(f"Error writing to speakers: {e}")
 
